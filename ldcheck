@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+
+import os
+import string
+import sys
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description='Check dynamic linkage consistency.')
+    parser.add_argument('files', metavar='FILE', nargs='+', help="a dynamically linked executable or library")
+    parser.add_argument('-r', '--resolved', action='store_true', help="Print resolved symbols")
+    parser.add_argument('-a', '--alldefined', action='store_true', help="Print all defined symbols")
+    parser.add_argument('-d', '--demangle', action='store_true', help="Demangle C++ names")
+
+    args = parser.parse_args()
+
+    printdefined = args.alldefined
+    printresolved = args.resolved
+    nmopts = ""
+    if args.demangle:
+        nmopts = "-C"
+
+    libs = args.files
+
+    # find all dependencies
+    for filename in libs:
+        with os.popen("readelf -d {0} | grep '\(NEEDED\)' | sed -r 's/.*\[(.*)\]/\\1/'".format(filename)) as f:
+            for line in f:
+                dependency = line.rstrip()
+                if not dependency in libs:
+                    libs.append(dependency)
+
+    print(libs)
+
+    # read all defined symbols
+    syms = {}
+    for filename in libs:
+        for sym in readsymbols(filename, nmopts):
+            if sym["type"] != "U":
+                # TODO: support symbols defined by multiple libs properly
+                syms[sym["name"]] = { "type": sym["type"], "file": filename };
+
+    # resolve undefined
+    for filename in libs:
+        with os.popen("nm -D {0} {1}".format(nmopts, filename)) as f:
+            for line in f:
+                line = line.rstrip()
+                sym = readsymbol(line)
+                if sym["type"] == "U":
+                    resolved = syms.get(sym["name"]);
+                    if resolved:
+                        if printresolved:
+                            print("{0:25} ({1}) {2:25} {3}".format(filename, resolved["type"], resolved["file"], line))
+                    else:
+                        print("{0:25} (U) {1:25} {2}".format(filename, "UNRESOLVED #####", line))
+                else:
+                    if printdefined:
+                        print(line)
+
+"""
+output format of nm:
+00003004 A __bss_start
+         U __cxa_atexit
+"""
+def readsymbol(line):
+    if line[0] != " ":
+        line = line.lstrip(string.hexdigits)
+    a = line.lstrip().split()
+    return { "type": a[0], "name": a[1] }
+
+def readsymbols(filename, nmopts = ""):
+    with os.popen("nm -D {0} {1}".format(nmopts, filename)) as f:
+        for line in f:
+            yield readsymbol(line.rstrip())
+
+if __name__ == "__main__":
+    main()
