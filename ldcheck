@@ -5,8 +5,8 @@
 
 import os
 import string
-import sys
 import argparse
+
 
 def main():
     parser = argparse.ArgumentParser(description='Check dynamic linkage consistency.')
@@ -35,7 +35,7 @@ def main():
         with os.popen("readelf -d {0} | grep '\(NEEDED\)' | sed -r 's/.*\[(.*)\]/\\1/'".format(filename)) as f:
             for line in f:
                 dependency = line.rstrip()
-                if not dependency in libs:
+                if dependency not in libs:
                     libs.append(dependency)
 
     print("libs:", libswithpath)
@@ -47,13 +47,13 @@ def main():
         for sym in readsymbols(filename, nmopts):
             if sym["type"] != "U":
                 # TODO: support symbols defined by multiple libs properly, and weak symbols
-                syms[sym["name"]] = { "type": sym["type"], "file": filename };
+                syms[sym["name"]] = {"type": sym["type"], "file": filename}
 
     # resolve unresolved
     for filename in libswithpath:
         for sym in readsymbols(filename, nmopts):
             if sym["type"] == "U":
-                resolved = syms.get(sym["name"]);
+                resolved = syms.get(sym["name"])
                 if resolved:
                     libsused.add(resolved["file"])
                     if printresolved:
@@ -69,12 +69,14 @@ def main():
     if unused:
         print("unused:", unused)
 
+
 def findlibraryinpath(filename, searchpath):
     for d in searchpath.split(os.pathsep):
         filepath = os.path.join(d, filename)
         if os.path.isfile(filepath):
             return filepath
     return filename
+
 
 """
 output format of nm:
@@ -84,9 +86,10 @@ output format of nm:
 def readsymbol(line):
     s = line if line[0] == " " else line.lstrip(string.hexdigits)
     s = s.lstrip()
-    return { "type": s[0], "name": s[2:], "line": line }
+    return {"type": s[0], "name": s[2:], "line": line}
 
-def readsymbols(filename, nmopts = ""):
+
+def readsymbols(filename, nmopts=""):
     with os.popen("nm -D {0} {1}".format(nmopts, filename)) as f:
         for line in f:
             yield readsymbol(line.rstrip())
