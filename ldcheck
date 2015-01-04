@@ -1,36 +1,22 @@
 #!/usr/bin/env python3
 
 # Dynamic linking consistency checker
-# hacked together by _that@xda, 2014-12
+# hacked together by _that@xda, 2014-12 to 2015-01
 
 import os
 import string
 import argparse
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Check dynamic linkage consistency.')
-    parser.add_argument('files', metavar='FILE', nargs='+', help="a dynamically linked executable or library.")
-    parser.add_argument('-p', '--path', help="Search path for libraries (use like LD_LIBRARY_PATH)")
-    parser.add_argument('-r', '--resolved', action='store_true', help="Print resolved symbols. By default only unresolved symbols are printed.")
-    parser.add_argument('-a', '--alldefined', action='store_true', help="Print all defined symbols")
-    parser.add_argument('-d', '--demangle', action='store_true', help="Demangle C++ names")
-
-    args = parser.parse_args()
-
-    printalldefined = args.alldefined
-    printresolved = args.resolved
-    nmopts = ""
-    if args.demangle:
-        nmopts = "-C"
-
-    libs = args.files
+def ldcheck(files, libpath, printalldefined, printresolved, demangle):
+    nmopts = "-C" if demangle else ""
+    libs = files
     libswithpath = []
 
     # find all dependencies
     for filename in libs:
-        if not os.path.isfile(filename) and args.path:
-            filename = findlibraryinpath(filename, args.path)
+        if not os.path.isfile(filename) and libpath:
+            filename = findlibraryinpath(filename, libpath)
         libswithpath.append(filename)
         with os.popen("readelf -d {0} | grep '\(NEEDED\)' | sed -r 's/.*\[(.*)\]/\\1/'".format(filename)) as f:
             for line in f:
@@ -55,7 +41,8 @@ def main():
             if sym["type"] == "U":
                 resolved = syms.get(sym["name"])
                 if resolved:
-                    libsused.add(resolved["file"])
+                    if filename in libsused:
+                        libsused.add(resolved["file"])
                     if printresolved:
                         print("{0:25} {1:25} {2} {3}".format(filename, resolved["file"], resolved["type"], sym["name"]))
                 else:
@@ -64,7 +51,6 @@ def main():
                 if printalldefined:
                     print("{0:25}                  {1}".format(filename, sym["line"]))
 
-    # TODO: doesn't check for libs that are only used by unused libs
     unused = set(libswithpath) - libsused
     if unused:
         print("unused:", unused)
@@ -95,4 +81,12 @@ def readsymbols(filename, nmopts=""):
             yield readsymbol(line.rstrip())
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Check dynamic linkage consistency.')
+    parser.add_argument('files', metavar='FILE', nargs='+', help="a dynamically linked executable or library.")
+    parser.add_argument('-p', '--path', help="Search path for libraries (use like LD_LIBRARY_PATH)")
+    parser.add_argument('-r', '--resolved', action='store_true', help="Print resolved symbols. By default only unresolved symbols are printed.")
+    parser.add_argument('-a', '--alldefined', action='store_true', help="Print all defined symbols")
+    parser.add_argument('-d', '--demangle', action='store_true', help="Demangle C++ names")
+
+    args = parser.parse_args()
+    ldcheck(args.files, args.path, args.alldefined, args.resolved, args.demangle)
