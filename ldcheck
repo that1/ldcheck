@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Dynamic linking consistency checker
-# hacked together by _that@xda, 2014-12 to 2015-01
+# hacked together by _that@xda, 2014-12 to 2022-03
 
 import os
 import string
@@ -33,7 +33,12 @@ def ldcheck(files, libpath, printalldefined, printresolved, demangle):
         for sym in readsymbols(filename, nmopts):
             if sym["type"] != "U":
                 # TODO: support symbols defined by multiple libs properly, and weak symbols
-                syms[sym["name"]] = {"type": sym["type"], "file": filename}
+                # TODO: more proper handling of symbol versions, see https://maskray.me/blog/2020-11-26-all-about-symbol-versioning
+                if "@@" in sym["name"]:
+                    syms[sym["name"].replace("@@", "@")] = {"type": sym["type"], "file": filename}
+                    syms[sym["name"].split("@@")[0]] = {"type": sym["type"], "file": filename}
+                else:
+                    syms[sym["name"]] = {"type": sym["type"], "file": filename}
 
     # resolve unresolved
     for filename in libswithpath:
@@ -81,7 +86,7 @@ def readsymbols(filename, nmopts=""):
             yield readsymbol(line.rstrip())
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Check dynamic linkage consistency.')
+    parser = argparse.ArgumentParser(description='Check dynamic linkage consistency by matching defined vs unresolved symbols.')
     parser.add_argument('files', metavar='FILE', nargs='+', help="a dynamically linked executable or library.")
     parser.add_argument('-p', '--path', help="Search path for libraries (use like LD_LIBRARY_PATH)")
     parser.add_argument('-r', '--resolved', action='store_true', help="Print resolved symbols. By default only unresolved symbols are printed.")
