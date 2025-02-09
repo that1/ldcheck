@@ -18,7 +18,7 @@ def ldcheck(files, libpath, printalldefined, printresolved, demangle):
         if not os.path.isfile(filename) and libpath:
             filename = findlibraryinpath(filename, libpath)
         libswithpath.append(filename)
-        with os.popen("readelf -d {0} | grep '\(NEEDED\)' | sed -r 's/.*\[(.*)\]/\\1/'".format(filename)) as f:
+        with os.popen(r"readelf -d {0} | grep '\(NEEDED\)' | sed -r 's/.*\[(.*)\]/\1/'".format(filename)) as f:
             for line in f:
                 dependency = line.rstrip()
                 if dependency not in libs:
